@@ -346,3 +346,4 @@ websocket-client==1.8.0
     # via jupyter-server
 widgetsnbextension==4.0.14
     # via ipywidgets
+pandas>=2.0.0
