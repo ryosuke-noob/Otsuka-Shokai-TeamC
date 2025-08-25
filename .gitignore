@@ -1,6 +1,8 @@
 .venv
 .env
 *.csv
+*.DS_Store
+*.pyc
 /docs/
 TeamC/
 crawldata/
