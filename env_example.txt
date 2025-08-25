@@ -1,0 +1,6 @@
+# Azure OpenAI API設定
+AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-api-key-here
+
+# その他の設定
+# 必要に応じて追加してください
