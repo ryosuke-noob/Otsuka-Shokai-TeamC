@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from app_src.components.top3_cards import render_top3
 from app_src.components.questions_panel import render_questions_panel
+from app_src.components.whisper_page import render_whisper_page
 from app_src.services.priority import recompute_priorities, temperature_from_transcript
 from app_src.services.dedup import dedup_questions
 from app_src.services import supabase_db as dbsvc
@@ -65,8 +66,8 @@ st.session_state.questions = bundle["questions"]
 st.session_state.backlog = [q for q in bundle["questions"] if q.get("status")=="take_home"]
 st.session_state.on_hold = [q for q in bundle["questions"] if q.get("status")=="on_hold"]
 
-tab_assist, tab_trans, tab_backlog, tab_profile, tab_history = st.tabs(
-    ["Assist（メモ × 質問）", "Transcript（見やすい表示）", "Backlog / On-Hold / 取得状況", "Lead Profile（DB保存）", "履歴 / DB"]
+tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_whisper = st.tabs(
+    ["Assist（メモ × 質問）", "Transcript（見やすい表示）", "Backlog / On-Hold / 取得状況", "Lead Profile（DB保存）", "履歴 / DB", "Whisper文字起こし"]
 )
 
 with tab_assist:
@@ -196,3 +197,6 @@ with tab_history:
     meetings = dbsvc.list_meetings(None, st.session_state.customer_id) if st.session_state.customer_id else []
     st.dataframe(pd.DataFrame(meetings), use_container_width=True, height=300)
     st.caption("※ conversations.customer_id が無い環境向けに、customers.name と conversations.customer_company の一致で紐付けています。")
+
+with tab_whisper:
+    render_whisper_page(dbsvc, st.session_state.meeting_id)
