@@ -2,6 +2,7 @@ from __future__ import annotations
 import os
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 # --- モジュールのインポート ---
 # `app_src`というプレフィックスは不要なため削除し、直接インポートします。
@@ -12,6 +13,8 @@ from ui import (
     sidebar, header, assist_tab, transcript_tab,
     backlog_tab, profile_tab, history_tab, debug_tab
 )
+from services.asr import ASRService, SharedTranscript, load_whisper, DESIRED_BROWSER_SR
+from services.summary import SummaryService, load_llm_client
 
 # ==============================
 # 基本設定
@@ -49,6 +52,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
   height:44px; white-space:nowrap; padding:.4rem .6rem !important;
 }
 .row-compact { padding:.55rem .6rem; border:1px solid rgba(255,255,255,.08); border-radius:12px; }
+div[data-testid="stWebrtcStatus"] button,
+div[data-testid="stWebrtcStatus"] + div button { display:none !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -65,15 +70,72 @@ def main():
     dify_service._init_dify_debug_state()
     state.load_session_data()
 
+    shared: SharedTranscript = st.session_state.get("shared_tr") or SharedTranscript()
+    st.session_state["shared_tr"] = shared
+
+    whisper_model = load_whisper()
+    llm_client, llm_model_name = load_llm_client()
+    asr: ASRService = st.session_state.get("asr") or ASRService(
+        whisper_model=whisper_model,
+        segment_sink=shared.append_lines,
+    )
+    st.session_state["asr"] = asr
+
+    summarizer: SummaryService = st.session_state.get("sum") or SummaryService(
+        client=llm_client,
+        model_name=llm_model_name,
+    )
+    st.session_state["sum"] = summarizer
+
+    # --- WebRTC 起動（SENDONLY） ---
+    ctx = webrtc_streamer(
+        key=f"rtc",
+        mode=WebRtcMode.SENDONLY,
+        media_stream_constraints={
+            "audio": {
+                "channelCount": 1,
+                "sampleRate": DESIRED_BROWSER_SR,
+                "echoCancellation": False,
+                "noiseSuppression": False,
+                "autoGainControl": False,
+            },
+            "video": False,
+        },
+        audio_frame_callback=asr.audio_frame_callback,
+        async_processing=True,
+        desired_playing_state=bool(st.session_state.get("meeting_started", False)),
+    )
+    
+
     # --- UI描画 ---
     sidebar.render_sidebar()
     header.render_header()
 
+    rtc_playing = bool(ctx and getattr(ctx.state, "playing", False))
+    asr_running = st.session_state.get("asr_running", False)
+    sum_running = st.session_state.get("sum_running", False)
+
+    if rtc_playing:
+        if not asr_running:
+            asr.start()
+            st.session_state["asr_running"] = True
+        if not sum_running:
+            summarizer.start(transcript_getter=shared.get, tick_q=asr.tick_q)
+            st.session_state["sum_running"] = True
+    else:
+        if asr_running:
+            asr.stop()
+            st.session_state["asr_running"] = False
+        if sum_running:
+            summarizer.stop()
+            st.session_state["sum_running"] = False
     # --- 自動実行スケジューラ ---
     if st.session_state.get("meeting_started", False):
         dify_service.run_dify_once_async("tick")
 
     # --- タブ定義 ---
+    st.session_state["transcript_text"] = shared.get()
+    st.session_state["summary_markdown"] = summarizer.summary_markdown()
     tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
     tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
 

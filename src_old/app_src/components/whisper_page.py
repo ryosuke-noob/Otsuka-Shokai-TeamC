@@ -7,24 +7,13 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer, WebRtcMode
 from dotenv import load_dotenv
 
-from ..services.asr import ASRService
-from ..services.summary import SummaryService
-
-ASR_SR    = 16000
-CHUNK_SEC = 30.0
-STEP_SEC  = 10.0
-SAFE_TAIL = 0.5
-SEMITONES = 12                      # +12 半音 → 2倍速
-SPEED     = float(2 ** (SEMITONES/12.0))
-LANG      = "ja"
-FP16      = False
-DESIRED_BROWSER_SR = 48000
-
-OVERLAP_CHARS      = 900
-TAIL_LINES_FOR_LLM = 24
+from ....src.services.asr import ASRService
+from ....src.services.summary import SummaryService
 
 AZURE_API_VERSION  = os.getenv("AZURE_OPENAI_API_VERSION", "2025-03-01-preview")
 AZURE_CHAT_MODEL   = os.getenv("AZURE_OPENAI_CHAT_MODEL", "gpt-5-mini")
+
+DESIRED_BROWSER_SR = 48000
 
 
 import threading
@@ -82,14 +71,6 @@ def render_whisper_page(dbsvc=None, meeting_id: Optional[str] = None):
     asr: ASRService = st.session_state.get(f"asr:{key}") or ASRService(
         meeting_key=key,
         whisper_model=whisper_model,
-        asr_sr=ASR_SR,
-        chunk_sec=CHUNK_SEC,
-        step_sec=STEP_SEC,
-        safe_tail=SAFE_TAIL,
-        speed=SPEED,
-        lang=LANG,
-        fp16=FP16,
-        desired_browser_sr=DESIRED_BROWSER_SR,
     )
     st.session_state[f"asr:{key}"] = asr
 
@@ -97,8 +78,6 @@ def render_whisper_page(dbsvc=None, meeting_id: Optional[str] = None):
         meeting_key=key,
         client=llm_client,
         model_name=llm_model_name,
-        overlap_chars=OVERLAP_CHARS,
-        tail_lines_for_llm=TAIL_LINES_FOR_LLM,
     )
     st.session_state[f"sum:{key}"] = summarizer
 

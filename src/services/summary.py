@@ -3,6 +3,11 @@ from __future__ import annotations
 import time, json, re, hashlib, threading, queue
 from typing import Dict, List, Literal, Callable
 from pydantic import BaseModel, Field
+import streamlit as st
+import os
+
+AZURE_API_VERSION  = "2025-03-01-preview"
+AZURE_CHAT_MODEL   = "gpt-5-mini"
 
 # --- Pydantic schema ---
 class LineOpModel(BaseModel):
@@ -12,6 +17,18 @@ class LineOpModel(BaseModel):
 
 class LinePatchV1Model(BaseModel):
     ops: List[LineOpModel] = Field(default_factory=list)
+
+@st.cache_resource(show_spinner=False)
+def load_llm_client():
+    from openai import AzureOpenAI
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+    api_key  = os.getenv("AZURE_OPENAI_API_KEY")
+    if not endpoint or not api_key:
+        st.warning("Azure OpenAI の環境変数(AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_API_KEY)が未設定です。")
+    client = AzureOpenAI(api_version=AZURE_API_VERSION,
+                         azure_endpoint=endpoint,
+                         api_key=api_key)
+    return client, AZURE_CHAT_MODEL
 
 # --- helpers (必要分だけ移植) ---
 def _norm_text(s: str) -> str:
@@ -104,9 +121,8 @@ def _clean_asr_text(raw: str, max_chars=2800) -> str:
     return s[:max_chars]
 
 class SummaryService:
-    def __init__(self, *, meeting_key: str, client, model_name: str,
+    def __init__(self, *, client, model_name: str,
                  overlap_chars=900, tail_lines_for_llm=24):
-        self.key = meeting_key
         self.client = client
         self.model_name = model_name
         self.OVERLAP = overlap_chars

@@ -86,6 +86,7 @@ dependencies = [
     { name = "openai-whisper" },
     { name = "python-dotenv" },
     { name = "soundfile" },
+    { name = "sseclient" },
     { name = "streamlit" },
     { name = "streamlit-webrtc" },
     { name = "torchaudio" },
@@ -98,6 +99,7 @@ requires-dist = [
     { name = "openai-whisper", specifier = ">=20250625" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "soundfile", specifier = ">=0.13.1" },
+    { name = "sseclient", specifier = ">=0.0.27" },
     { name = "streamlit", specifier = ">=1.48.1" },
     { name = "streamlit-webrtc", specifier = "==0.61.3" },
     { name = "torchaudio", specifier = ">=2.8.0" },
@@ -1535,6 +1537,16 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/df/8c11dc4dfceda14e3003bb81a0d0edcaaf0796dd7b4f826ea3e532146bba/soundfile-0.13.1-py2.py3-none-win32.whl", hash = "sha256:c734564fab7c5ddf8e9be5bf70bab68042cd17e9c214c06e365e20d64f9a69d5", size = 899881, upload-time = "2025-01-25T09:16:56.663Z" },
     { url = "https://files.pythonhosted.org/packages/14/e9/6b761de83277f2f02ded7e7ea6f07828ec78e4b229b80e4ca55dd205b9dc/soundfile-0.13.1-py2.py3-none-win_amd64.whl", hash = "sha256:1e70a05a0626524a69e9f0f4dd2ec174b4e9567f4d8b6c11d38b5c289be36ee9", size = 1019162, upload-time = "2025-01-25T09:16:59.573Z" },
 ]
+
+[[package]]
+name = "sseclient"
+version = "0.0.27"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/6c/fa601216344952be8f9a51a3f49b4274bbbc58bd395f87f67f6131726358/sseclient-0.0.27.tar.gz", hash = "sha256:b2fe534dcb33b1d3faad13d60c5a7c718e28f85987f2a034ecf5ec279918c11c", size = 7465, upload-time = "2020-09-25T02:46:41.997Z" }
 
 [[package]]
 name = "streamlit"

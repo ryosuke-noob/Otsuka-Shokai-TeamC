@@ -127,6 +127,15 @@ def render_assist_tab():
         if st.button("メモをDBへ保存", use_container_width=True):
             state._save_note_to_db()
 
+        st.divider()
+        st.subheader("🧾 ライブ要約")
+        summary_md = st.session_state.get("summary_markdown") or "（要約を生成中…）"
+        with st.container(border=True, height=300):
+            st.markdown(summary_md)
+        # 手動更新したい時の簡易リロード（任意）
+        if st.button("要約を更新", key="refresh_summary_assist", use_container_width=True):
+            st.rerun()
+
     with right:
         st.subheader("🔥 今すぐ聞くべき3問")
         unanswered = [q for q in st.session_state.questions if q.get("status") == "unanswered"]
