@@ -18,6 +18,9 @@ RUN python -m venv /app/.venv && \
     torch torchvision torchaudio --extra-index-url https://pypi.org/simple && \
     /app/.venv/bin/python -m pip install --no-cache-dir -U openai-whisper numpy soundfile
 
+COPY preload_whisper.py .
+RUN /app/.venv/bin/python preload_whisper.py
+
 COPY . .
 
 ENV PYTHONPATH=/app/src
