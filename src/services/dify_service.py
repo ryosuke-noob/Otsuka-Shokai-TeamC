@@ -79,7 +79,7 @@ def collect_inputs_for_dify() -> Dict[str, str]:
         "q_list_old": _to_str(q_list_old),
         "shodan_memo": _cap(_to_str(memo), 4000),
         "shodan_mojiokoshi": _to_str(transcript),
-        "shodan_phase": _to_str(shodan_phase),
+        # "shodan_phase": _to_str(shodan_phase),
     }
 
 # ==============================
