@@ -361,7 +361,7 @@ def _clean_asr_text(raw: str, max_chars=2800) -> str:
 class SummaryService:
     def __init__(self, *, client, model_name: str,
                  overlap_chars=900, tail_lines_for_llm=24,
-                 dispatch_interval_sec=12, coalesce_idle_sec=3,
+                 dispatch_interval_sec=12, coalesce_idle_sec=1,
                  max_inflight=2):
         self.client = client
         self.model_name = model_name
@@ -428,7 +428,7 @@ class SummaryService:
                         instructions=system,
                         input=[{"role":"user","content":[{"type":"input_text","text":user}]}],
                         text_format=LinePatchV1Model,
-                        max_output_tokens=600,
+                        max_output_tokens=2000,
                         reasoning={"effort":"low"},
                     )
                     parsed = getattr(resp, "output_parsed", None)
@@ -539,19 +539,22 @@ class SummaryService:
             system = ("あなたは文字起こしテキスト要約アシスタントです。")
             user = (
                 f"(meta) req_id={req_id}, txt_len={cur_len}, start={start}, end={end}\n\n"
+                "# タスク\n"
                 "営業担当者向けの『会話フロー要約』を、時系列の箇条書きで更新してください。"
                 "人称代名詞は「先方」「こちら」を用います。"
                 "挨拶や相づち等のノイズは無視し、確実な事実・合意・依頼・疑問・次アクションのみ残してください。"
                 "また、現在の商談の状況を「現状・課題・ニーズ把握」、「商品要件把握」、「契約条件把握」から選択してください。"
-                "あくまで営業担当者用の要約であるため、基本は相手の発話に元づく内容をまとめてください\n\n"
-                "既存要約（末尾。行番号は全体の通し番号）:\n"
+                "あくまで営業担当者用の要約であるため、先方の発言・意図を正確に反映してください。\n\n"
+                "# 既存要約（末尾。行番号は全体の通し番号）:\n"
                 f"{tail_text or '(なし)'}\n\n"
                 f"総行数: {total}\n"
-                "文脈＋差分（ASR生テキスト。末尾が新しい文字起こし）:\n"
+                "# 文脈＋差分（ASR生テキスト。末尾が新しい文字起こし）:\n"
                 f"{context}\n\n"
-                "ルール: 追加は add_after または add_end、既存要約の修正は update、不要は delete。"
-                "変更が不要または確信が持てない場合は ops は空配列。"
-                "営業と先方の発言をまとめて事実として文語体で記述。「～と述べた」ではなく「～」と記述。"
+                "# ルール\n"
+                "追加は add_after または add_end、既存要約の修正は update、不要は delete。基本的には add_end を用いて、差分文字起こしをまとめる。"
+                "text には行番号は含めず、1文のみを記述。"
+                "変更が不要または確信が持てない場合は ops は空配列。同じオプションを複数回使うことも可能。全体として必要最低限の更新にとどめる。"
+                "text には営業と先方の発言をまとめて事実として文語体で記述。「～と述べた」ではなく「～」と記述。"
                 "商談の状況は必ず1つ選択し、phaseに設定する。"
             )
 
