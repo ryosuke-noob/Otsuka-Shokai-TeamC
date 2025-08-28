@@ -87,6 +87,11 @@ def main():
     )
     st.session_state["sum"] = summarizer
 
+    sidebar.render_sidebar()
+    header.render_header()
+
+    want_run = bool(st.session_state.get("meeting_started", False))
+
     # --- WebRTC 起動（SENDONLY） ---
     ctx = webrtc_streamer(
         key=f"rtc",
@@ -103,13 +108,9 @@ def main():
         },
         audio_frame_callback=asr.audio_frame_callback,
         async_processing=True,
-        desired_playing_state=bool(st.session_state.get("meeting_started", False)),
+        desired_playing_state=want_run,
     )
     
-
-    # --- UI描画 ---
-    sidebar.render_sidebar()
-    header.render_header()
 
     rtc_playing = bool(ctx and getattr(ctx.state, "playing", False))
     asr_running = st.session_state.get("asr_running", False)

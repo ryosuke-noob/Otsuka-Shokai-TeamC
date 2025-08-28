@@ -41,11 +41,21 @@ def render_header():
         
         with c5:
             colA, colB = st.columns(2)
-            if colA.button("▶ 開始", use_container_width=True, disabled=dify_service.dify_busy()):
+            if colA.button(
+                "▶ 開始",
+                use_container_width=True,
+                disabled=(dify_service.dify_busy() or st.session_state.get("meeting_started", False)),
+            ):
                 st.session_state.meeting_started = True
                 dify_service.run_dify_once_async("start")
-            if colB.button("■ 終了", use_container_width=True):
+                st.rerun()
+            if colB.button(
+                "■ 終了",
+                use_container_width=True,
+                disabled=not st.session_state.get("meeting_started", False),
+            ):
                 st.session_state.meeting_started = False
+                st.rerun()
             
             status = "実行中..." if dify_service.dify_busy() else "待機中"
             st.caption(f"Dify: {status} (最終実行: {st.session_state.dify_last_ran_at})")
