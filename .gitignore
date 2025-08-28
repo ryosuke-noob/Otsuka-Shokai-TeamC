@@ -1,7 +1,7 @@
 .venv
 .env
 *.csv
-/docs/
 TeamC/
 crawldata/
 temp_README.md
+mcp.json
