@@ -94,39 +94,46 @@ def _render_assist_tab():
 
     with right:
         st.subheader("🔥 今すぐ聞くべき3問")
-        unanswered = [q for q in st.session_state.questions if q.get("status") == "unanswered"]
-        top3 = sorted(unanswered, key=lambda x: x.get("priority", 50), reverse=True)[:3]
+        qs = st.session_state.get("questions", [])
+        # enumerateのインデックスを第2ソートキーにして、同点なら新しい（インデックスが大きい）方を優先
+        unanswered_enum = [(idx, q) for idx, q in enumerate(qs) if q.get("status") == "unanswered"]
+        top3_pairs = sorted(
+            unanswered_enum,
+            key=lambda t: (t[1].get("priority", 50), t[0]),
+            reverse=True
+        )[:3]
+        top3 = [q for _, q in top3_pairs]
         
-        cols = st.columns(len(top3) if top3 else 1)
+        # 縦に並べる：各アイテムを1列で順番に表示
         for i, q in enumerate(top3):
-            with cols[i]:
-                with st.container(border=True, height=290):
-                    st.markdown(f"**#{i+1}**")
-                    st.markdown(f'<div style="min-height: 80px;">{q.get("text", "")}</div>', unsafe_allow_html=True)
-                    
+            with st.container(border=True):
+                # 左=質問文／右=操作ボタン（横並び）
+                left_q, right_btns = st.columns([0.75, 0.25], gap="medium")
+                with left_q:
                     tags_html = " ".join(f'<span class="badge">#{t}</span>' for t in q.get("tags", []))
-                    st.markdown(f"P: {int(q.get('priority',50))} {tags_html}", unsafe_allow_html=True)
-
-                    # --- ここから変更 ---
-                    # keyが重複しないように、ループのインデックス `i` を使う
+                    st.markdown(f"**#{i+1}** P: {int(q.get('priority',50))} {tags_html}", unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div style="min-height:36px;">{q.get("text","")}</div>',
+                        unsafe_allow_html=True
+                    )
+                with right_btns:
+                    b1, b2, b3 = st.columns(3, gap="small")
                     qid = q.get("id")
-                    
-                    if st.button("✅ 聞けた", key=f"top3_ok_{i}", use_container_width=True):
-                        # qidがあればそれを使って更新、なければオブジェクトを直接変更
-                        if qid: state._set_status(qid, "resolved")
-                        else: q['status'] = 'resolved'
-                        st.rerun()
-
-                    if st.button("🧳 持ち帰り", key=f"top3_take_{i}", use_container_width=True):
-                        if qid: state._set_status(qid, "take_home")
-                        else: q['status'] = 'take_home'
-                        st.rerun()
-
-                    if st.button("🕒 保留", key=f"top3_hold_{i}", use_container_width=True):
-                        if qid: state._set_status(qid, "on_hold")
-                        else: q['status'] = 'on_hold'
-                        st.rerun()
-                    # --- ここまで変更 ---
+                    with b1:
+                        if st.button("✅", key=f"top3_ok_{i}", help="聞けた", use_container_width=True):
+                            if qid: state._set_status(qid, "resolved")
+                            else: q['status'] = 'resolved'
+                            st.rerun()
+                    with b2:
+                        if st.button("🧳", key=f"top3_take_{i}", help="持ち帰り", use_container_width=True):
+                            if qid: state._set_status(qid, "take_home")
+                            else: q['status'] = 'take_home'
+                            st.rerun()
+                    with b3:
+                        if st.button("🕒", key=f"top3_hold_{i}", help="保留", use_container_width=True):
+                            if qid: state._set_status(qid, "on_hold")
+                            else: q['status'] = 'on_hold'
+                            st.rerun()
 
     st.divider()
     st.subheader("📋 質問リスト")
