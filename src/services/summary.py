@@ -160,13 +160,26 @@ class SummaryService:
 
     def _worker(self):
         while not self._stop_evt.is_set():
+            # 1) 最初の tick を待つ（来なければ 1 秒でループ）
             try:
                 self._tick_q.get(timeout=1.0)
             except queue.Empty:
                 continue
 
+            # 2) ここで「たまっている tick を全部捨てる（= 最新だけにする）」
+            drained = 1
+            while True:
+                try:
+                    self._tick_q.get_nowait()
+                    drained += 1
+                except queue.Empty:
+                    break
+            # ↑ drained は統計用。必要なければ未使用でOK
+
+            # 3) いま時点の全文スナップショットで“1回だけ”要約を回す
             full_txt = self._getter() or ""
             if len(full_txt) <= self._last_idx:
+                # 新規テキストが無ければスキップ
                 continue
 
             start = max(0, self._last_idx - self.OVERLAP)
@@ -175,10 +188,7 @@ class SummaryService:
             tail_text = _lines_tail_text(self.state, self.TAIL)
             total = len(self.state.get("lines", []))
 
-            system = (
-                "あなたは文字起こしテキスト要約アシスタントです。"
-            )
-            schema = '{"ops":[{"op":"add_after","line_no":<int>,"text":"..."},{"op":"add_end","text":"..."},{"op":"update","line_no":<int>,"text":"..."},{"op":"delete","line_no":<int>}]}'
+            system = ("あなたは文字起こしテキスト要約アシスタントです。")
             user = (
                 "営業担当者向けの『会話フロー要約』を、時系列の箇条書きで更新してください。"
                 "人称代名詞は「先方」「こちら」を用います。"
@@ -207,7 +217,8 @@ class SummaryService:
                     reasoning={"effort":"low"},
                 )
                 parsed = getattr(resp, "output_parsed", None)
-                if parsed: patch = parsed.model_dump()
+                if parsed:
+                    patch = parsed.model_dump()
             except Exception as e:
                 self._last_debug_md = self._debug_md(system, user, e)
                 try:
@@ -219,15 +230,18 @@ class SummaryService:
                     patch = _extract_json_block(fb.choices[0].message.content if fb and fb.choices else "")
                 except Exception as ee:
                     self._last_debug_md = self._debug_md(system, user, ee)
-                    self._last_idx = max(0, len(full_txt)-self.OVERLAP)
+                    self._last_idx = max(0, len(full_txt) - self.OVERLAP)
                     continue
 
             if patch and isinstance(patch.get("ops", None), list) and isinstance(patch.get("phase",""), str):
                 _apply_line_patch(self.state, patch)
                 _dedupe_lines(self.state)
                 self.summary_md = _render_markdown(self.state)
-                rewind = min(self.OVERLAP//2, len(full_txt))
+
+                # 次回のために処理位置を前進（少し巻き戻しもする）
+                rewind = min(self.OVERLAP // 2, len(full_txt))
                 self._last_idx = max(0, end - rewind)
+
 
 
     @staticmethod
