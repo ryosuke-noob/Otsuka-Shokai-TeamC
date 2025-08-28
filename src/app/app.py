@@ -52,8 +52,26 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
   height:44px; white-space:nowrap; padding:.4rem .6rem !important;
 }
 .row-compact { padding:.55rem .6rem; border:1px solid rgba(255,255,255,.08); border-radius:12px; }
-div[data-testid="stWebrtcStatus"] button,
-div[data-testid="stWebrtcStatus"] + div button { display:none !important; }
+
+div[data-testid="stComponent"] iframe[title^="streamlit_webrtc"],
+iframe[title^="streamlit_webrtc"] {
+  position: absolute !important;
+  left: -99999px !important;  /* 画面外へ */
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  border: 0 !important;
+  display: block !important;
+}
+
+div[data-testid="stComponent"]:has(> iframe[title^="streamlit_webrtc"]) {
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
 </style>
 """,
     unsafe_allow_html=True,
