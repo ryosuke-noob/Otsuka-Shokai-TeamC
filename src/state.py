@@ -44,6 +44,28 @@ def initialize_session():
         st.session_state.setdefault("questions_source", "db")
         st.session_state.setdefault("_loaded_meeting_id", None)
 
+# def load_session_data(force_db_reload: bool = False):
+#     meeting_id = st.session_state.get("meeting_id")
+#     customer_id = st.session_state.get("customer_id")
+
+#     bundle = cached_bundle(meeting_id)
+#     profile = dbsvc.get_customer(None, customer_id) if customer_id else {}
+#     st.session_state.profile = profile or {}
+#     st.session_state.transcript = bundle.get("transcript", [])
+
+#     st.session_state.note_text = st.session_state.get("note_text", "")
+#     notes = bundle.get("notes", [])
+#     if notes:
+#         st.session_state.note_text = notes[-1].get("content", "")
+
+#     changed_meeting = st.session_state.get("_loaded_meeting_id") != meeting_id
+
+#     if force_db_reload or changed_meeting or not st.session_state.get("questions"):
+#         st.session_state.questions = bundle.get("questions", [])
+#         st.session_state["questions_source"] = "db"
+
+#     st.session_state["_loaded_meeting_id"] = meeting_id
+
 def load_session_data(force_db_reload: bool = False):
     meeting_id = st.session_state.get("meeting_id")
     customer_id = st.session_state.get("customer_id")
@@ -53,12 +75,17 @@ def load_session_data(force_db_reload: bool = False):
     st.session_state.profile = profile or {}
     st.session_state.transcript = bundle.get("transcript", [])
 
-    st.session_state.note_text = st.session_state.get("note_text", "")
-    notes = bundle.get("notes", [])
-    if notes:
-        st.session_state.note_text = notes[-1].get("content", "")
-
     changed_meeting = st.session_state.get("_loaded_meeting_id") != meeting_id
+
+    # --- ここから変更 ---
+    # 商談が変更されたか、DBから強制リロードする場合のみDBのメモを読み込む
+    if changed_meeting or force_db_reload:
+        notes = bundle.get("notes", [])
+        if notes:
+            st.session_state.note_text = notes[-1].get("content", "")
+        else:
+            st.session_state.note_text = "" # 商談にメモがなければ空にする
+    # --- ここまで変更 ---
 
     if force_db_reload or changed_meeting or not st.session_state.get("questions"):
         st.session_state.questions = bundle.get("questions", [])

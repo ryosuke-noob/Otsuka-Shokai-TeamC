@@ -81,6 +81,7 @@ div[data-testid="stComponent"]:has(> iframe[title^="streamlit_webrtc"]) {
 # メイン処理
 # ==============================
 def main():
+    print("test")
     # --- 初期化 ---
     dbsvc.init_db(None)
     dbsvc.seed_if_empty(None, None)
