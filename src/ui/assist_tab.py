@@ -130,6 +130,8 @@ def render_assist_tab():
         st.divider()
         st.subheader("🧾 ライブ要約")
         summary_md = st.session_state.get("summary_markdown") or "（要約を生成中…）"
+        #shodan_phase = st.session_state.get("shodan_phase") or "（商談の状況未設定）"
+        #transcript_text = st.session_state.get("transcript_text") or "（トランスクリプト未設定）"
         with st.container(border=True, height=300):
             st.markdown(summary_md)
         # 手動更新したい時の簡易リロード（任意）
