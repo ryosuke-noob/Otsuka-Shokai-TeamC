@@ -128,7 +128,8 @@ class SummaryService:
         self.OVERLAP = overlap_chars
         self.TAIL = tail_lines_for_llm
         self.state: Dict = {"lines": []}
-        self.summary_md = "（要約を生成中…）"
+        # self.summary_md = "（要約を生成中…）"
+        self.summary_md = ""
         self._last_idx = 0
         self._last_debug_md: str | None = None
         self._stop_evt = threading.Event()

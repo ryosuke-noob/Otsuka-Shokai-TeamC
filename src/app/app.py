@@ -63,6 +63,7 @@ div[data-testid="stWebrtcStatus"] + div button { display:none !important; }
 # メイン処理
 # ==============================
 def main():
+    print("test")
     # --- 初期化 ---
     dbsvc.init_db(None)
     dbsvc.seed_if_empty(None, None)
