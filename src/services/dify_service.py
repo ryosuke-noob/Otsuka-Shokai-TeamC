@@ -66,7 +66,7 @@ def collect_inputs_for_dify() -> Dict[str, str]:
         q_lines.append(f"[{q.get('status', '')}] p={pr} {q.get('text', '')} #{tags}".strip())
     q_list_old = "\n".join(q_lines)
 
-    memo = st.session_state.get("note_text", "")
+    memo = st.session_state.get("note_text_snapshot", "")
     # memo = st.session_state.get("summary_markdown", "")
     # transcript_list = st.session_state.get("transcript", [])
     # transcript = "\n".join([f"{ts}: {text}" for ts, text in transcript_list[-200:]])
