@@ -80,99 +80,6 @@ div[data-testid="stComponent"]:has(> iframe[title^="streamlit_webrtc"]) {
 # ==============================
 # メイン処理
 # ==============================
-# def main():
-#     # --- 初期化 ---
-#     dbsvc.init_db(None)
-#     dbsvc.seed_if_empty(None, None)
-#     state.initialize_session()
-#     dify_service._init_dify_debug_state()
-#     state.load_session_data()
-
-#     shared: SharedTranscript = st.session_state.get("shared_tr") or SharedTranscript()
-#     st.session_state["shared_tr"] = shared
-
-#     whisper_model = load_whisper()
-#     llm_client, llm_model_name = load_llm_client()
-#     asr: ASRService = st.session_state.get("asr") or ASRService(
-#         whisper_model=whisper_model,
-#         segment_sink=shared.append_lines,
-#     )
-#     st.session_state["asr"] = asr
-
-#     summarizer: SummaryService = st.session_state.get("sum") or SummaryService(
-#         client=llm_client,
-#         model_name=llm_model_name,
-#     )
-#     st.session_state["sum"] = summarizer
-
-#     sidebar.render_sidebar()
-#     header.render_header()
-
-#     want_run = bool(st.session_state.get("meeting_started", False))
-
-#     # --- WebRTC 起動（SENDONLY） ---
-#     ctx = webrtc_streamer(
-#         key=f"rtc",
-#         mode=WebRtcMode.SENDONLY,
-#         media_stream_constraints={
-#             "audio": {
-#                 "channelCount": 1,
-#                 "sampleRate": DESIRED_BROWSER_SR,
-#                 "echoCancellation": False,
-#                 "noiseSuppression": False,
-#                 "autoGainControl": False,
-#             },
-#             "video": False,
-#         },
-#         audio_frame_callback=asr.audio_frame_callback,
-#         async_processing=True,
-#         desired_playing_state=want_run,
-#     )
-    
-
-#     rtc_playing = bool(ctx and getattr(ctx.state, "playing", False))
-#     asr_running = st.session_state.get("asr_running", False)
-#     sum_running = st.session_state.get("sum_running", False)
-
-#     if rtc_playing:
-#         if not asr_running:
-#             asr.start()
-#             st.session_state["asr_running"] = True
-#         if not sum_running:
-#             summarizer.start(transcript_getter=shared.get, tick_q=asr.tick_q)
-#             st.session_state["sum_running"] = True
-#     else:
-#         if asr_running:
-#             asr.stop()
-#             st.session_state["asr_running"] = False
-#         if sum_running:
-#             summarizer.stop()
-#             st.session_state["sum_running"] = False
-#     # --- 自動実行スケジューラ ---
-#     if st.session_state.get("meeting_started", False):
-#         dify_service.run_dify_once_async("tick")
-
-#     # --- タブ定義 ---
-#     st.session_state["transcript_text"] = shared.get()
-#     st.session_state["summary_markdown"] = summarizer.summary_markdown()
-#     st.session_state["shodan_phase"] = summarizer.shodan_phase()
-#     tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
-#     tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
-
-#     with tab_assist:
-#         assist_tab.render_assist_tab()
-#     with tab_trans:
-#         transcript_tab.render_transcript_tab()
-#     with tab_backlog:
-#         backlog_tab.render_backlog_tab()
-#     with tab_profile:
-#         profile_tab.render_profile_tab()
-#     with tab_history:
-#         history_tab.render_history_tab()
-#     with tab_dify:
-#         debug_tab.render_debug_tab()
-# app.py の main 関数を以下に差し替えてください
-
 def main():
     # --- 初期化 ---
     dbsvc.init_db(None)
@@ -181,30 +88,22 @@ def main():
     dify_service._init_dify_debug_state()
     state.load_session_data()
 
-    # --- ここから変更 ---
-    # st.session_state にサービスインスタンスが存在しない場合のみ、一度だけ生成する
-    if "shared_tr" not in st.session_state:
-        st.session_state.shared_tr = SharedTranscript()
-    
-    if "asr" not in st.session_state:
-        whisper_model = load_whisper()
-        st.session_state.asr = ASRService(
-            whisper_model=whisper_model,
-            segment_sink=st.session_state.shared_tr.append_lines,
-        )
+    shared: SharedTranscript = st.session_state.get("shared_tr") or SharedTranscript()
+    st.session_state["shared_tr"] = shared
 
-    if "sum" not in st.session_state:
-        llm_client, llm_model_name = load_llm_client()
-        st.session_state.sum = SummaryService(
-            client=llm_client,
-            model_name=llm_model_name,
-        )
+    whisper_model = load_whisper()
+    llm_client, llm_model_name = load_llm_client()
+    asr: ASRService = st.session_state.get("asr") or ASRService(
+        whisper_model=whisper_model,
+        segment_sink=shared.append_lines,
+    )
+    st.session_state["asr"] = asr
 
-    # st.session_state から常に同じインスタンスを取得
-    shared: SharedTranscript = st.session_state.shared_tr
-    asr: ASRService = st.session_state.asr
-    summarizer: SummaryService = st.session_state.sum
-    # --- ここまで変更 ---
+    summarizer: SummaryService = st.session_state.get("sum") or SummaryService(
+        client=llm_client,
+        model_name=llm_model_name,
+    )
+    st.session_state["sum"] = summarizer
 
     sidebar.render_sidebar()
     header.render_header()
@@ -230,6 +129,7 @@ def main():
         desired_playing_state=want_run,
     )
     
+
     rtc_playing = bool(ctx and getattr(ctx.state, "playing", False))
     asr_running = st.session_state.get("asr_running", False)
     sum_running = st.session_state.get("sum_running", False)
@@ -248,18 +148,14 @@ def main():
         if sum_running:
             summarizer.stop()
             st.session_state["sum_running"] = False
-            
     # --- 自動実行スケジューラ ---
     if st.session_state.get("meeting_started", False):
         dify_service.run_dify_once_async("tick")
 
-    # --- 状態をUIに反映 ---
-    # バックグラウンドで更新された結果を、UI描画の直前に session_state に格納する
+    # --- タブ定義 ---
     st.session_state["transcript_text"] = shared.get()
     st.session_state["summary_markdown"] = summarizer.summary_markdown()
     st.session_state["shodan_phase"] = summarizer.shodan_phase()
-
-    # --- タブ定義 ---
     tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
     tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
 
