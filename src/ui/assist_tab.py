@@ -203,16 +203,22 @@ def render_assist_tab():
         c1, c2 = st.columns([4, 1])
         with c1:
             new_q_text = st.text_input("新しい質問を入力", key="q_add_text", placeholder="新しい質問を入力してください")
+        # with c2:
+        #     if st.button("追加", use_container_width=True):
+        #         if new_q_text:
+        #             st.session_state.questions.append({
+        #                 "id": None, "text": new_q_text, "tags": [],
+        #                 "priority": 50, "status": "unanswered", "source": "ui"
+        #             })
+        #             st.session_state.questions = dedup_questions(st.session_state.questions, 0.9)
+        #             st.session_state.q_add_text = ""
+        #             st.rerun()
+
         with c2:
-            if st.button("追加", use_container_width=True):
-                if new_q_text:
-                    st.session_state.questions.append({
-                        "id": None, "text": new_q_text, "tags": [],
-                        "priority": 50, "status": "unanswered", "source": "ui"
-                    })
-                    st.session_state.questions = dedup_questions(st.session_state.questions, 0.9)
-                    st.session_state.q_add_text = ""
-                    st.rerun()
+            # --- ここから変更 ---
+            # `state`モジュールから関数を呼び出す
+            st.button("追加", on_click=state.add_question_callback, use_container_width=True)
+            # --- ここまで変更 ---
 
     filtered_list = st.session_state.get("questions", [])
     if search_keyword:

@@ -4,6 +4,23 @@ from typing import Optional
 import streamlit as st
 from services import supabase_db as dbsvc
 from utils import inline_status
+from services.dedup import dedup_questions
+
+# assist_tab.py から移動したコールバック関数
+def add_question_callback():
+    """質問を追加して入力欄をクリアするためのコールバック関数"""
+    new_q_text = st.session_state.get("q_add_text", "").strip()
+    if new_q_text:
+        st.session_state.questions.append({
+            "id": None, 
+            "text": new_q_text, 
+            "tags": [],
+            "priority": 50, 
+            "status": "unanswered", 
+            "source": "ui"
+        })
+        st.session_state.questions = dedup_questions(st.session_state.questions, 0.9)
+        st.session_state.q_add_text = ""
 
 # ==============================
 # キャッシュ（読み込み）

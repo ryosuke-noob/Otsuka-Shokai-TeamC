@@ -17,6 +17,7 @@ class LineOpModel(BaseModel):
 
 class LinePatchV1Model(BaseModel):
     ops: List[LineOpModel] = Field(default_factory=list)
+    phase: Literal["現状・課題・ニーズ把握","商品要件把握","契約条件把握"]
 
 @st.cache_resource(show_spinner=False)
 def load_llm_client():
@@ -65,6 +66,8 @@ def _apply_line_patch(state: Dict, patch: Dict):
         elif action == "delete":
             if 1 <= line_no <= len(items): del items[line_no-1]
     state["lines"] = items
+
+    state["phase"] = patch.get("phase","")
 
 def _dedupe_lines(state: Dict):
     seen, out = set(), []
@@ -128,8 +131,7 @@ class SummaryService:
         self.OVERLAP = overlap_chars
         self.TAIL = tail_lines_for_llm
         self.state: Dict = {"lines": []}
-        # self.summary_md = "（要約を生成中…）"
-        self.summary_md = ""
+        self.summary_md = "（要約を生成中…）"
         self._last_idx = 0
         self._last_debug_md: str | None = None
         self._stop_evt = threading.Event()
@@ -148,6 +150,9 @@ class SummaryService:
 
     def summary_markdown(self) -> str:
         return self.summary_md
+
+    def shodan_phase(self) -> str:
+        return self.state.get("phase","")
 
     def last_prompt_debug(self) -> str | None:
         return self._last_debug_md
@@ -177,6 +182,7 @@ class SummaryService:
                 "営業担当者向けの『会話フロー要約』を、時系列の箇条書きで更新してください。"
                 "人称代名詞は「先方」「こちら」を用います。"
                 "挨拶や相づち等のノイズは無視し、確実な事実・合意・依頼・疑問・次アクションのみ残してください。"
+                "また、現在の商談の状況を「現状・課題・ニーズ把握」、「商品要件把握」、「契約条件把握」から選択してください。"
                 "あくまで営業担当者用の要約であるため、基本は相手の発話に元づく内容をまとめてください\n\n"
                 "既存要約（末尾。行番号は全体の通し番号）:\n"
                 f"{tail_text or '(なし)'}\n\n"
@@ -186,6 +192,7 @@ class SummaryService:
                 "ルール: 追加は add_after または add_end、既存要約の修正は update、不要は delete。"
                 "変更が不要または確信が持てない場合は ops は空配列。"
                 "営業と先方の発言をまとめて事実として文語体で記述。「～と述べた」ではなく「～」と記述。"
+                "商談の状況は必ず1つ選択し、phaseに設定する。"
             )
 
             patch = {}
@@ -214,12 +221,13 @@ class SummaryService:
                     self._last_idx = max(0, len(full_txt)-self.OVERLAP)
                     continue
 
-            if patch and isinstance(patch.get("ops", None), list):
+            if patch and isinstance(patch.get("ops", None), list) and isinstance(patch.get("phase",""), str):
                 _apply_line_patch(self.state, patch)
                 _dedupe_lines(self.state)
                 self.summary_md = _render_markdown(self.state)
                 rewind = min(self.OVERLAP//2, len(full_txt))
                 self._last_idx = max(0, end - rewind)
+
 
     @staticmethod
     def _debug_md(instructions: str, user: str, err: Exception) -> str:
