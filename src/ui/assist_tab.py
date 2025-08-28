@@ -118,7 +118,22 @@ import state
 import utils
 from services.dedup import dedup_questions
 
-def render_assist_tab():
+def summary_fragment():
+    summarizer = st.session_state.get("sum")
+    latest = summarizer.summary_markdown() if summarizer else None
+    if latest is not None:
+        st.session_state["summary_markdown"] = latest
+
+    shared = st.session_state.get("shared_tr")
+    latest_transcript = shared.get()
+    if latest_transcript is not None:
+        st.session_state["transcript_text"] = latest_transcript
+    
+    st.subheader("🧾 ライブ要約")
+    st.markdown(st.session_state.get("summary_markdown", "（要約を生成中…）"))
+
+@st.fragment(run_every="5s")
+def _render_assist_tab():
     all_tags_options = sorted(list(set(tag for q in st.session_state.get("questions", []) for tag in q.get("tags", []))))
 
     left, right = st.columns([0.55, 0.45], gap="large")
@@ -140,14 +155,7 @@ def render_assist_tab():
         
         # ライブ要約セクション
         st.divider()
-        st.subheader("🧾 ライブ要約")
-        summary_md = st.session_state.get("summary_markdown", "（要約を生成中…）")
-        if summary_md == "":
-            summary_md = "（要約を生成中…）"
-        with st.container(border=True, height=300):
-            st.markdown(summary_md)
-        if st.button("要約を更新", key="refresh_summary_assist", use_container_width=True):
-            st.rerun()
+        summary_fragment()
 
     with right:
         st.subheader("🔥 今すぐ聞くべき3問")
@@ -258,3 +266,6 @@ def render_assist_tab():
 
     if st.button("質問リストの変更をDBへ保存", use_container_width=True, type="primary"):
         state._save_questions_to_db()
+
+def render_assist_tab():
+    _render_assist_tab()
