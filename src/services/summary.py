@@ -236,7 +236,6 @@
 #                 "**instructions**\n```text\n"+_trim(instructions)+"\n```\n\n"
 #                 "**user**\n```text\n"+_trim(user)+"\n```")
 
-# core/summary_service.py
 from __future__ import annotations
 import time, json, re, hashlib, threading, queue
 from typing import Dict, List, Literal, Callable
@@ -247,7 +246,6 @@ import os
 AZURE_API_VERSION  = "2025-03-01-preview"
 AZURE_CHAT_MODEL   = "gpt-5-mini"
 
-# --- Pydantic schema ---
 class LineOpModel(BaseModel):
     op: Literal["add_after","add_end","update","delete"]
     line_no: int | None = None
@@ -360,21 +358,56 @@ def _clean_asr_text(raw: str, max_chars=2800) -> str:
     s = re.sub(r"\b(?:\+?\d{1,3}[-\s]?)?(?:\d{2,4}[-\s]?){2,3}\d{3,4}\b", "[redacted-phone]", s)
     s = re.sub(r"\b[A-Za-z0-9/_-]{24,}\b", "[redacted-token]", s)
     return s[:max_chars]
-
 class SummaryService:
     def __init__(self, *, client, model_name: str,
-                 overlap_chars=900, tail_lines_for_llm=24):
+                 overlap_chars=900, tail_lines_for_llm=24,
+                 dispatch_interval_sec=12, coalesce_idle_sec=3,
+                 max_inflight=2):
         self.client = client
         self.model_name = model_name
         self.OVERLAP = overlap_chars
         self.TAIL = tail_lines_for_llm
+
         self.state: Dict = {"lines": []}
-        # self.summary_md = "（要約を生成中…）"
         self.summary_md = ""
         self._last_idx = 0
+
+        # --- 新規: ディスパッチ制御 ---
+        self._dispatch_interval_sec = dispatch_interval_sec  # 10-20秒くらいに調整
+        self._coalesce_idle_sec = coalesce_idle_sec
+        self._last_sent_at = 0.0
+        self._dirty = False
+        self._last_seen_len = 0
+        self._last_change_at = 0.0
+
+        # --- 並列・世代管理 ---
+        self._max_inflight = max_inflight
+        self._inflight: Dict[int, Dict] = {}  # req_id -> meta
+        self._req_seq = 0
+        self._latest_applied_req = 0
+        self._lock = threading.Lock()
+
+        # --- 障害対応 ---
+        self._err_count = 0
+        self._cb_open_until = 0.0          # circuit breaker open-until(unixtime)
+        self._cb_fail_threshold = 5         # 連続失敗で開く
+        self._cb_open_seconds = 45          # 開いてる時間
+
         self._last_debug_md: str | None = None
         self._stop_evt = threading.Event()
         self._th = None
+
+    # 任意: 外部から軽く起床
+    def nudge(self):
+        try:
+            self._tick_q.put_nowait(1)
+        except Exception:
+            pass
+
+    def stop(self): self._stop_evt.set()
+    def summary_markdown(self) -> str: return self.summary_md
+    def shodan_phase(self) -> str: return self.state.get("phase","")
+    def last_prompt_debug(self) -> str | None: return self._last_debug_md
 
     def start(self, *, transcript_getter: Callable[[], str], tick_q: queue.Queue):
         self._getter = transcript_getter
@@ -384,50 +417,128 @@ class SummaryService:
         self._th = threading.Thread(target=self._worker, daemon=True)
         self._th.start()
 
-    def stop(self):
-        self._stop_evt.set()
+    # -------- LLM呼び出し（リトライ＋フォールバック） --------
+    def _call_llm_for_patch(self, system: str, user: str) -> dict:
+        patch = {}
+        for attempt in range(3):
+            try:
+                if attempt < 2:
+                    resp = self.client.responses.parse(
+                        model=self.model_name,
+                        instructions=system,
+                        input=[{"role":"user","content":[{"type":"input_text","text":user}]}],
+                        text_format=LinePatchV1Model,
+                        max_output_tokens=600,
+                        reasoning={"effort":"low"},
+                    )
+                    parsed = getattr(resp, "output_parsed", None)
+                    if parsed: patch = parsed.model_dump()
+                else:
+                    fb = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=[{"role":"system","content":system},{"role":"user","content":user}],
+                        max_completion_tokens=600,
+                    )
+                    patch = _extract_json_block(fb.choices[0].message.content if fb and fb.choices else "")
+                if isinstance(patch, dict):
+                    return patch  # 成功
+            except Exception as e:
+                self._last_debug_md = self._debug_md(system, user, e)
+                self._err_count += 1
+                time.sleep(min(2 ** self._err_count, 10))
+                continue
+        return {}  # 全滅
 
-    def summary_markdown(self) -> str:
-        return self.summary_md
+    # -------- 応答適用（stale drop & 排他） --------
+    def _apply_if_current(self, req_id: int, patch: dict, end_used: int, full_len_at_req: int):
+        with self._lock:
+            # 古い応答は破棄
+            if req_id < self._latest_applied_req:
+                self._inflight.pop(req_id, None)
+                return
 
-    def shodan_phase(self) -> str:
-        return self.state.get("phase","")
+            # 読み取り位置は常に前進（固着回避）
+            rewind = min(self.OVERLAP // 2, full_len_at_req)
+            self._last_idx = max(self._last_idx, end_used - rewind)
 
-    def last_prompt_debug(self) -> str | None:
-        return self._last_debug_md
+            if isinstance(patch.get("ops", None), list) and isinstance(patch.get("phase",""), str):
+                _apply_line_patch(self.state, patch)
+                _dedupe_lines(self.state)
+                self.summary_md = _render_markdown(self.state)
+                self._latest_applied_req = req_id
+                self._err_count = 0  # 成功でリセット
 
+            self._inflight.pop(req_id, None)
+
+    # -------- 非同期推論タスク --------
+    def _infer_task(self, req_id: int, start: int, end: int, system: str, user: str, full_len_at_req: int):
+        try:
+            patch = self._call_llm_for_patch(system, user)
+            self._apply_if_current(req_id, patch, end, full_len_at_req)
+        except Exception as e:
+            # ここに来るのは稀（上で捕捉済みだが保険）
+            self._last_debug_md = self._debug_md(system, user, e)
+            self._err_count += 1
+        finally:
+            # 連続失敗でサーキットを開く
+            if self._err_count >= self._cb_fail_threshold:
+                self._cb_open_until = time.time() + self._cb_open_seconds
+
+    # -------- ディスパッチ兼監視ワーカー --------
     def _worker(self):
         while not self._stop_evt.is_set():
-            # 1) 最初の tick を待つ（来なければ 1 秒でループ）
+            # tickは使っても使わなくてもOK（ここでは軽く消費）
             try:
-                self._tick_q.get(timeout=1.0)
-            except queue.Empty:
-                continue
-
-            # 2) ここで「たまっている tick を全部捨てる（= 最新だけにする）」
-            drained = 1
-            while True:
-                try:
+                self._tick_q.get(timeout=0.5)
+                while True:
                     self._tick_q.get_nowait()
-                    drained += 1
-                except queue.Empty:
-                    break
-            # ↑ drained は統計用。必要なければ未使用でOK
+            except queue.Empty:
+                pass
 
-            # 3) いま時点の全文スナップショットで“1回だけ”要約を回す
+            now = time.time()
+
+            # サーキットオープン中は送らない
+            if now < self._cb_open_until:
+                time.sleep(0.2); continue
+
             full_txt = self._getter() or ""
-            if len(full_txt) <= self._last_idx:
-                # 新規テキストが無ければスキップ
+            cur_len = len(full_txt)
+
+            # 増分検出
+            if cur_len > self._last_seen_len:
+                self._last_seen_len = cur_len
+                self._last_change_at = now
+                self._dirty = True
+
+            # 送る条件:
+            # - dirty
+            # - 最後の送信から dispatch_interval_sec 経過
+            # - 最終増加から coalesce_idle_sec 経過（落ち着くまで待つ）
+            # - インフライトが上限未満
+            can_send = (self._dirty and
+                        (now - self._last_sent_at) >= self._dispatch_interval_sec and
+                        (now - self._last_change_at) >= self._coalesce_idle_sec and
+                        (len(self._inflight) < self._max_inflight))
+
+            if not can_send:
                 continue
 
+            # 入力スナップショット作成（差分+テール）
             start = max(0, self._last_idx - self.OVERLAP)
-            end   = len(full_txt)
+            end   = cur_len
             context = _clean_asr_text(full_txt[start:end])
             tail_text = _lines_tail_text(self.state, self.TAIL)
             total = len(self.state.get("lines", []))
 
+            req_id = self._req_seq = self._req_seq + 1
+            self._inflight[req_id] = {"start": start, "end": end, "len": cur_len}
+            self._last_sent_at = now
+            # 連投時も最低限のアイドル待ち後にまた送れるよう dirty は残す
+            # （適用時に dirty の扱いは状況次第で更新してOK）
+
             system = ("あなたは文字起こしテキスト要約アシスタントです。")
             user = (
+                f"(meta) req_id={req_id}, txt_len={cur_len}, start={start}, end={end}\n\n"
                 "営業担当者向けの『会話フロー要約』を、時系列の箇条書きで更新してください。"
                 "人称代名詞は「先方」「こちら」を用います。"
                 "挨拶や相づち等のノイズは無視し、確実な事実・合意・依頼・疑問・次アクションのみ残してください。"
@@ -444,43 +555,16 @@ class SummaryService:
                 "商談の状況は必ず1つ選択し、phaseに設定する。"
             )
 
-            patch = {}
-            try:
-                resp = self.client.responses.parse(
-                    model=self.model_name,
-                    instructions=system,
-                    input=[{"role":"user","content":[{"type":"input_text","text":user}]}],
-                    text_format=LinePatchV1Model,
-                    max_output_tokens=600,
-                    reasoning={"effort":"low"},
-                )
-                parsed = getattr(resp, "output_parsed", None)
-                if parsed:
-                    patch = parsed.model_dump()
-            except Exception as e:
-                self._last_debug_md = self._debug_md(system, user, e)
-                try:
-                    fb = self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=[{"role":"system","content":system},{"role":"user","content":user}],
-                        max_completion_tokens=600,
-                    )
-                    patch = _extract_json_block(fb.choices[0].message.content if fb and fb.choices else "")
-                except Exception as ee:
-                    self._last_debug_md = self._debug_md(system, user, ee)
-                    self._last_idx = max(0, len(full_txt) - self.OVERLAP)
-                    continue
+            # 非同期で発射（古い応答は適用時に弾く）
+            threading.Thread(
+                target=self._infer_task,
+                args=(req_id, start, end, system, user, cur_len),
+                daemon=True
+            ).start()
 
-            if patch and isinstance(patch.get("ops", None), list) and isinstance(patch.get("phase",""), str):
-                _apply_line_patch(self.state, patch)
-                _dedupe_lines(self.state)
-                self.summary_md = _render_markdown(self.state)
-
-                # 次回のために処理位置を前進（少し巻き戻しもする）
-                rewind = min(self.OVERLAP // 2, len(full_txt))
-                self._last_idx = max(0, end - rewind)
-
-
+            # コアレス: 直後に transcript がさらに伸びても、coalesce_idle_sec 経過まで待ってから次を送る
+            # （ここではループ継続で監視し続ける／sleepは不要）
+            continue
 
     @staticmethod
     def _debug_md(instructions: str, user: str, err: Exception) -> str:

@@ -66,7 +66,7 @@ def collect_inputs_for_dify() -> Dict[str, str]:
         q_lines.append(f"[{q.get('status', '')}] p={pr} {q.get('text', '')} #{tags}".strip())
     q_list_old = "\n".join(q_lines)
 
-    memo = st.session_state.get("note_text", "")
+    memo = st.session_state.get("note_text_snapshot", "")
     # memo = st.session_state.get("summary_markdown", "")
     # transcript_list = st.session_state.get("transcript", [])
     # transcript = "\n".join([f"{ts}: {text}" for ts, text in transcript_list[-200:]])
@@ -79,7 +79,7 @@ def collect_inputs_for_dify() -> Dict[str, str]:
         "q_list_old": _to_str(q_list_old),
         "shodan_memo": _cap(_to_str(memo), 4000),
         "shodan_mojiokoshi": _to_str(transcript),
-        # "shodan_phase": _to_str(shodan_phase),
+        "shodan_phase": _to_str(shodan_phase),
     }
 
 # ==============================

@@ -153,8 +153,8 @@ def main():
         dify_service.run_dify_once_async("tick")
 
     # --- タブ定義 ---
-    st.session_state["transcript_text"] = shared.get()
-    st.session_state["summary_markdown"] = summarizer.summary_markdown()
+    #st.session_state["transcript_text"] = shared.get()
+    #st.session_state["summary_markdown"] = summarizer.summary_markdown()
     st.session_state["shodan_phase"] = summarizer.shodan_phase()
     tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
     tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
