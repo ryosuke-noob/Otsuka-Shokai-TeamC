@@ -1,21 +1,27 @@
 services:
   web:
-    build: .
-    ports:
-      - "${PORT:-8501}:8501"
+    build:
+      context: .
+      args:
+        TORCH_CUDA: cu125
+    network_mode: host
     env_file:
       - .env
     environment:
-      - UV_PYTHON_PREFERENCE=system
+      - UV_LINK_MODE=copy
+      - STREAMLIT_SERVER_RUN_ON_SAVE=false
+      - STREAMLIT_SERVER_FILEWATCHERTYPE=none
     volumes:
       - ./:/app
       - venv:/app/.venv
       - uv_cache:/root/.cache/uv
-    command: >
-      sh -lc "uv sync &&
-        uv run -- streamlit run src/app/app.py
-        --server.address 0.0.0.0
-        --server.port ${PORT:-8501}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 volumes:
   venv:

@@ -80,11 +80,12 @@ def new_meeting(_db_path, customer_id: Optional[str], title: str) -> str:
     return rows[0]["id"] if rows else ""
 
 # --- bundle / transcripts / notes ---
-def _p_from_db(p):  # 0~1 or 0~100を0~1へ
+def _p_from_db(p):
+    """DBから読み込んだ値を、そのまま0-100のfloatとして返す"""
     try:
-        f=float(p); return f/100.0 if f>1.0 else f
-    except: return 0.0
-
+        return float(p)
+    except (ValueError, TypeError):
+        return 0.0
 def get_meeting_bundle(_db_path, meeting_id: Optional[str]) -> Dict[str, Any]:
     if not meeting_id: return {"transcript": [], "questions": [], "notes": []}
 
