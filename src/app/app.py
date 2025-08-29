@@ -156,13 +156,16 @@ def main():
     #st.session_state["transcript_text"] = shared.get()
     #st.session_state["summary_markdown"] = summarizer.summary_markdown()
     st.session_state["shodan_phase"] = summarizer.shodan_phase()
-    tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
-    tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
+    #tab_names = ["Assist", "Transcript", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
+    #tab_assist, tab_trans, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
+
+    tab_names = ["Assist", "Backlog", "Lead Profile", "履歴", "Dify デバッグ"]
+    tab_assist, tab_backlog, tab_profile, tab_history, tab_dify = st.tabs(tab_names)
 
     with tab_assist:
         assist_tab.render_assist_tab()
-    with tab_trans:
-        transcript_tab.render_transcript_tab()
+    #with tab_trans:
+    #    transcript_tab.render_transcript_tab()
     with tab_backlog:
         backlog_tab.render_backlog_tab()
     with tab_profile:
